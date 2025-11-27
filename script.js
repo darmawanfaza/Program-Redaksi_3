@@ -929,19 +929,52 @@ document.getElementById("downloadBtn")?.addEventListener("click", function () {
     alert("Belum ada redaksi yang dibuat.");
     return;
   }
-  let content = "NoUrut\tRedaksi\r\n";
+
+  // HTML sederhana yang bisa dibaca Microsoft Word
+  let html =
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:w="urn:schemas-microsoft-com:office:word" ' +
+    'xmlns="http://www.w3.org/TR/REC-html40">' +
+    "<head><meta charset='utf-8'><title>Redaksi Taksiran</title></head><body>";
+
+  html +=
+    "<h2 style='font-family:Calibri; margin-bottom:8px;'>Daftar Redaksi Taksiran</h2>" +
+    "<table border='1' cellpadding='6' cellspacing='0' " +
+    "style='border-collapse:collapse; font-family:Calibri; font-size:11pt;'>" +
+    "<thead>" +
+    "<tr style='background:#f3f4f6;'>" +
+    "<th style='width:40px;'>No.</th>" +
+    "<th>Redaksi</th>" +
+    "</tr>" +
+    "</thead>" +
+    "<tbody>";
+
   entries.forEach((e) => {
-    const safeRedaksi = e.redaksi.replace(/\s+/g, " ").trim();
-    content += e.noUrut + "\t" + safeRedaksi + "\r\n";
+    // gunakan segmentsToHtml supaya format italic sama seperti di tampilan web
+    const redaksiHtml = segmentsToHtml(e.segments);
+    const noUrutSafe = String(e.noUrut || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    html +=
+      "<tr>" +
+      "<td>" +
+      noUrutSafe +
+      "</td>" +
+      "<td>" +
+      redaksiHtml +
+      "</td>" +
+      "</tr>";
   });
 
-  const blob = new Blob([content], {
-    type: "text/plain;charset=utf-8",
+  html += "</tbody></table></body></html>";
+
+  const blob = new Blob([html], {
+    type: "application/msword;charset=utf-8",
   });
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "redaksi_taksiran.txt";
+  a.download = "redaksi_taksiran.doc"; // kalau mau pakai .docx, ganti jadi .docx di sini
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -997,3 +1030,4 @@ document.addEventListener("DOMContentLoaded", () => {
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) logoutBtn.addEventListener("click", showLoginScreen);
 });
+
