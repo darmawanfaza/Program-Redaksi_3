@@ -1,8 +1,3 @@
-// ================= LOGIN CONFIG =================
-const VALID_USERNAME = "admin";
-const VALID_PASSWORD = "lab123";
-const LOGIN_KEY = "logged_in_user_redaksi";
-
 // ================= DATA & FUNGSI UTAMA APLIKASI =================
 
 const entries = [];
@@ -278,12 +273,13 @@ function buildRedaksiEmasBatanganSegments({
   return segments;
 }
 
-/* ---------- Builder Batu Lepasan ---------- */
+/* ---------- Builder Batu Lepasan & Mutiara ---------- */
 function buildRedaksiBatuLepasSegments({
   jumlahWordRaw,
   jenisBatu,
   beratCarat,
   harga,
+  isMutiara,
 }) {
   const segments = [];
   const jword = (jumlahWordRaw || "satu").toLowerCase();
@@ -291,9 +287,17 @@ function buildRedaksiBatuLepasSegments({
   const jenis = (jenisBatu || "").trim();
   const beratStr = formatBerat2(beratCarat);
 
-  segments.push({ text: jwordCap + " ", italic: false });
-  segments.push({ text: toTitleCase(jenis) + " ", italic: true });
-  segments.push({ text: "berat " + beratStr + " carat", italic: false });
+  if (isMutiara) {
+    // Contoh: "Satu mutiara berat 1,20 carat ..."
+    segments.push({ text: jwordCap + " mutiara ", italic: false });
+    segments.push({ text: "berat " + beratStr + " carat", italic: false });
+  } else {
+    // Contoh: "Satu batu berjenis Ruby berat 1,20 carat ..."
+    segments.push({ text: jwordCap + " batu ", italic: false });
+    segments.push({ text: "berjenis ", italic: false });
+    segments.push({ text: toTitleCase(jenis) + " ", italic: true });
+    segments.push({ text: "berat " + beratStr + " carat", italic: false });
+  }
 
   harga = Number(harga || 0);
 
@@ -411,6 +415,9 @@ function addEntryFromForm() {
   const barangCustom = (document.getElementById("barangCustom").value || "")
     .trim();
 
+  const isBatuLepasan = barang === "batu lepasan";
+  const isMutiara = barang === "mutiara";
+
   const karatVal = (document.getElementById("karat").value || "").trim();
   const isEmas = karatVal !== "Diluar SNI";
   const karatInt = isEmas ? parseInt(karatVal || "0", 10) : 0;
@@ -467,7 +474,7 @@ function addEntryFromForm() {
     document.getElementById("batu1_jenis").value || ""
   ).trim();
 
-  // Validasi
+  // Validasi dasar
   if (barang === "lainnya" && !barangCustom) {
     setError(
       document.getElementById("barangCustom"),
@@ -496,7 +503,7 @@ function addEntryFromForm() {
     alert("Untuk emas batangan, isi Merk Emas dan Nomor Seri terlebih dahulu.");
     return;
   }
-  if (barang === "batu" && !jenisBatuLepas) {
+  if (isBatuLepasan && !jenisBatuLepas) {
     setError(
       document.getElementById("batu1_jenis"),
       null,
@@ -514,12 +521,12 @@ function addEntryFromForm() {
     alert("Jika ada berlian, jumlah berlian harus lebih besar dari 0.");
     return;
   }
-  if (adaBatu && stones.length === 0 && barang !== "batu") {
+  if (adaBatu && stones.length === 0 && !isBatuLepasan && !isMutiara) {
     alert("Checkbox batu dicentang, tetapi belum ada data batu yang diisi.");
     return;
   }
 
-  if (harga === 0 && isEmas) {
+  if (harga === 0 && isEmas && !isBatuLepasan && !isMutiara) {
     const hargaErrorEl = document.getElementById("hargaError");
     setError(
       document.getElementById("harga"),
@@ -542,12 +549,13 @@ function addEntryFromForm() {
       berat,
       harga,
     });
-  } else if (barang === "batu") {
+  } else if (isBatuLepasan || isMutiara) {
     segments = buildRedaksiBatuLepasSegments({
       jumlahWordRaw,
       jenisBatu: jenisBatuLepas,
       beratCarat: berat,
       harga,
+      isMutiara,
     });
   } else {
     segments = buildRedaksiPerhiasanSegments({
@@ -584,6 +592,8 @@ function addEntryFromForm() {
     noSeriEmas,
     harga,
     jenisBatuLepas,
+    isBatuLepasan,
+    isMutiara,
   };
 
   if (editIndex !== null) {
@@ -664,7 +674,7 @@ function loadFormFromEntry(index) {
     s3.jumlah != null ? s3.jumlah : "";
   document.getElementById("batu3_jenis").value = s3.jenis || "";
 
-  if (d.barang === "batu" && d.jenisBatuLepas) {
+  if ((d.barang === "batu lepasan" || d.barang === "mutiara") && d.jenisBatuLepas) {
     document.getElementById("batu1_jenis").value = d.jenisBatuLepas;
   }
 
@@ -731,7 +741,13 @@ function parseCsv(text) {
 function isTrueLike(val) {
   if (!val) return false;
   const v = String(val).trim().toLowerCase();
-  return v === "1" || v === "true" || v === "ya" || v === "y";
+  return (
+    v === "1" ||
+    v === "true" ||
+    v === "ya" ||
+    v === "y" ||
+    v === "ada"
+  );
 }
 
 function importFromCsv(csvText) {
@@ -801,6 +817,9 @@ function importFromCsv(csvText) {
       .trim()
       .toLowerCase();
 
+    const isBatuLepasan = barang === "batu lepasan";
+    const isMutiara = barang === "mutiara";
+
     const karatVal = (getVal(cols, "karat", "") || "").trim();
     const isEmas = karatVal !== "Diluar SNI";
     const karatInt = isEmas ? parseInt(karatVal || "0", 10) : 0;
@@ -821,7 +840,7 @@ function importFromCsv(csvText) {
     const b3t = getVal(cols, "batu3jenis", "");
     const merkEmas = getVal(cols, "merkemas", "");
     const noSeriEmas = getVal(cols, "noseriemas", "");
-    const hargaStr = getVal(cols, "harga", "0");
+    const hargaStrRaw = getVal(cols, "harga", "0") || "0";
 
     const adaBerlian = isTrueLike(adaBerlianStr);
     let jumlahBerlian = 0;
@@ -851,7 +870,9 @@ function importFromCsv(csvText) {
         stones.push({ jumlah: b3j, jenis: batu3jenis });
     }
 
-    const harga = parseInt(hargaStr || "0", 10) || 0;
+    // Bersihkan harga dari karakter non-digit
+    const hargaDigits = String(hargaStrRaw).replace(/[^\d]/g, "");
+    const harga = parseInt(hargaDigits || "0", 10) || 0;
     const jenisBatuLepas = (b1t || "").trim();
 
     let segments;
@@ -865,12 +886,13 @@ function importFromCsv(csvText) {
         berat,
         harga,
       });
-    } else if (barang === "batu") {
+    } else if (isBatuLepasan || isMutiara) {
       segments = buildRedaksiBatuLepasSegments({
         jumlahWordRaw,
         jenisBatu: jenisBatuLepas,
         beratCarat: berat,
         harga,
+        isMutiara,
       });
     } else {
       const namaBarangFinal = barang;
@@ -907,7 +929,10 @@ function importFromCsv(csvText) {
       merkEmas,
       noSeriEmas,
       harga,
-      jenisBatuLepas: barang === "batu" ? jenisBatuLepas : "",
+      jenisBatuLepas:
+        isBatuLepasan || isMutiara ? jenisBatuLepas : "",
+      isBatuLepasan,
+      isMutiara,
     };
 
     entries.push({ noUrut, redaksi: redaksiText, segments, data });
@@ -922,7 +947,7 @@ function importFromCsv(csvText) {
   renderTable();
 }
 
-/* ---------- DOWNLOAD TXT ---------- */
+/* ---------- DOWNLOAD DOC (WORD) ---------- */
 
 document.getElementById("downloadBtn")?.addEventListener("click", function () {
   if (entries.length === 0) {
@@ -930,7 +955,6 @@ document.getElementById("downloadBtn")?.addEventListener("click", function () {
     return;
   }
 
-  // HTML sederhana yang bisa dibaca Microsoft Word
   let html =
     '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
     'xmlns:w="urn:schemas-microsoft-com:office:word" ' +
@@ -950,9 +974,10 @@ document.getElementById("downloadBtn")?.addEventListener("click", function () {
     "<tbody>";
 
   entries.forEach((e) => {
-    // gunakan segmentsToHtml supaya format italic sama seperti di tampilan web
     const redaksiHtml = segmentsToHtml(e.segments);
-    const noUrutSafe = String(e.noUrut || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const noUrutSafe = String(e.noUrut || "")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
     html +=
       "<tr>" +
@@ -974,60 +999,25 @@ document.getElementById("downloadBtn")?.addEventListener("click", function () {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "redaksi_taksiran.doc"; // kalau mau pakai .docx, ganti jadi .docx di sini
+  a.download = "redaksi_taksiran.doc";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 });
 
-/* ================= LOGIN / LOGOUT ================= */
+/* ---------- HAPUS SEMUA ---------- */
 
-function showLoginScreen() {
-  const loginScreen = document.getElementById("loginScreen");
-  const appContent = document.getElementById("appContent");
-  if (appContent) appContent.style.display = "none";
-  if (loginScreen) loginScreen.style.display = "flex";
-  localStorage.removeItem(LOGIN_KEY);
+const clearAllBtn = document.getElementById("clearAllBtn");
+if (clearAllBtn) {
+  clearAllBtn.addEventListener("click", () => {
+    if (!entries.length) {
+      alert("Belum ada redaksi yang dibuat.");
+      return;
+    }
+    const yakin = confirm("Hapus semua redaksi yang sudah diinput?");
+    if (!yakin) return;
+    entries.length = 0;
+    renderTable();
+  });
 }
-
-function showAppScreen(username) {
-  const loginScreen = document.getElementById("loginScreen");
-  const appContent = document.getElementById("appContent");
-  if (loginScreen) loginScreen.style.display = "none";
-  if (appContent) appContent.style.display = "block";
-  if (username) localStorage.setItem(LOGIN_KEY, username);
-}
-
-function handleLogin(event) {
-  event.preventDefault();
-  const u = document.getElementById("loginUsername").value.trim();
-  const p = document.getElementById("loginPassword").value.trim();
-  const err = document.getElementById("loginError");
-
-  if (u === VALID_USERNAME && p === VALID_PASSWORD) {
-    err.style.display = "none";
-    err.textContent = "";
-    showAppScreen(u);
-  } else {
-    err.textContent = "Username atau password salah.";
-    err.style.display = "block";
-    document.getElementById("loginPassword").value = "";
-  }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const saved = localStorage.getItem(LOGIN_KEY);
-  if (saved) {
-    showAppScreen(saved);
-  } else {
-    showLoginScreen();
-  }
-
-  const loginForm = document.getElementById("loginForm");
-  if (loginForm) loginForm.addEventListener("submit", handleLogin);
-
-  const logoutBtn = document.getElementById("logoutBtn");
-  if (logoutBtn) logoutBtn.addEventListener("click", showLoginScreen);
-});
-
